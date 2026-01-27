@@ -1,0 +1,58 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum ImportStatus {
+  IDLE
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model ImportJob {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  filePath String
+  status ImportStatus
+  totalRows Int @default(2000000)
+  processedRows Int @default(0)
+  startedAt DateTime?
+  finishedAt  DateTime?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  customers Customer[]
+}
+
+model Customer {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  customerId String @unique
+  firstName String
+  lastName String
+  phone1 String
+  phone2 String
+  company String
+  city String
+  country String
+  email String
+  subscriptionDate DateTime
+  website String
+  description String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  importJobId String? @db.ObjectId
+  importJob ImportJob? @relation(fields: [importJobId], references: [id])
+
+  @@index([email])
+}
