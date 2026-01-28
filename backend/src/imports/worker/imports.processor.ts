@@ -1,9 +1,9 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job, Queue } from 'bullmq';
-import { PrismaService } from 'src/database/prisma.service';
+import { Job } from 'bullmq';
 import * as fs from 'fs';
 import * as csv from 'csv-parser';
 import { Logger } from '@nestjs/common/services/logger.service';
+import { PrismaService } from 'src/database/prisma.service';
 
 @Processor('csv-import')
 export class ImportsProcessor extends WorkerHost {
@@ -39,22 +39,28 @@ export class ImportsProcessor extends WorkerHost {
   async processCsv(filePath: string, jobId: string): Promise<void> {
     return new Promise((resolve, reject) => {
       let batch: any[] = [];
-      const batchSize = parseInt(process.env.BATCH_SIZE || '100') || 100;
+      const batchSize = parseInt(process.env.BATCH_SIZE || '1000');
 
-      fs.createReadStream(filePath)
-        .pipe(csv())
-        .on('data', (row) => {
-          const customerData = this.transformRow(row, jobId);
-          batch.push(customerData);
+      const stream = fs.createReadStream(filePath).pipe(csv());
+
+      stream
+        .on('data', async (row) => {
+          stream.pause();
+
+          const customer = this.transformRow(row, jobId);
+          batch.push(customer);
 
           if (batch.length >= batchSize) {
             const currentBatch = [...batch];
             batch = [];
 
-            this.insertBatch(currentBatch, jobId).catch((err) => {
-              Logger.debug(err);
-            });
+            try {
+              await this.insertBatch(currentBatch, jobId);
+            } catch (error) {
+              Logger.error('Batch insert error:', error);
+            }
           }
+          stream.resume();
         })
         .on('end', async () => {
           if (batch.length > 0) {
@@ -87,25 +93,32 @@ export class ImportsProcessor extends WorkerHost {
   }
 
   private async insertBatch(customers: any[], jobId: string): Promise<void> {
-    let successCount = 0;
+    // Get existing customerIds to check for duplicates
+    const customerIds = customers.map((c) => c.customerId);
+    const existing = await this.prisma.customer.findMany({
+      where: { customerId: { in: customerIds } },
+      select: { customerId: true },
+    });
 
-    for (const customer of customers) {
-      try {
-        await this.prisma.customer.create({
-          data: customer,
-        });
-        successCount++;
-      } catch (error) {
-        if (error.code === 'P2002') {
-          continue;
-        }
-        throw error;
-      }
+    const existingIds = new Set(existing.map((c) => c.customerId));
+
+    // Filter out duplicates
+    const newCustomers = customers.filter(
+      (c) => !existingIds.has(c.customerId),
+    );
+
+    // Insert only new customers in one batch
+    if (newCustomers.length > 0) {
+      await this.prisma.customer.createMany({
+        data: newCustomers,
+      });
     }
+
+    // Update progress with total processed (including skipped duplicates)
     await this.prisma.importJob.update({
       where: { id: jobId },
       data: {
-        processedRows: { increment: successCount },
+        processedRows: { increment: customers.length },
       },
     });
   }
