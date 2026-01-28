@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ExpressAdapter } from '@bull-board/express';
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
@@ -12,6 +12,11 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors();
+
+  // Enable versioning
+  app.enableVersioning({
+    type: VersioningType.URI,
+  });
 
   // Enable validation
   app.useGlobalPipes(

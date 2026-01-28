@@ -1,15 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CustomerService } from './customer.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 
-@Controller({ path: 'customer', version: 'v1' })
+@Controller('customer')
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 
   @Get()
   async findAll(
-    @Param('page') page: number = 1,
-    @Param('limit') limit: number = 10,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 50,
   ) {
     return this.customerService.findAll(page, limit);
   }
@@ -25,6 +25,11 @@ export class CustomerController {
     @Body() updateCustomerDto: CreateCustomerDto,
   ) {
     return this.customerService.update(id, updateCustomerDto);
+  }
+
+  @Get('recent')
+  async findRecent(@Query('limit') limit: number = 20) {
+    return this.customerService.findRecent(limit);
   }
 
   @Get(':id')

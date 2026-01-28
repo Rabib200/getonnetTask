@@ -35,6 +35,13 @@ export class CustomerService {
     });
   }
 
+  async findRecent(limit: number) {
+    return await this.prisma.customer.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
   async sync() {}
 
   async progress() {}
