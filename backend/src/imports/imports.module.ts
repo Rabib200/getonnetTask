@@ -12,6 +12,10 @@ import { ImportsProcessor } from './worker/imports.processor';
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379'),
       },
+      defaultJobOptions: {
+        removeOnComplete: false,
+        removeOnFail: false,
+      },
     }),
   ],
   controllers: [ImportsController],

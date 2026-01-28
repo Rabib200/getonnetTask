@@ -62,20 +62,18 @@ export default function CustomersPage() {
   }, [page]);
 
   useEffect(() => {
-    const scrollElement = parentRef.current;
-    if (!scrollElement) return;
+    const el = parentRef.current;
+    if (!el) return;
 
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = scrollElement;
-      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-
-      if (scrollPercentage > 0.8 && hasMore && !loading) {
-        setPage((prev) => prev + 1);
+    const onScroll = () => {
+      const scrollPct = (el.scrollTop + el.clientHeight) / el.scrollHeight;
+      if (scrollPct > 0.8 && hasMore && !loading) {
+        setPage((p) => p + 1);
       }
     };
 
-    scrollElement.addEventListener('scroll', handleScroll);
-    return () => scrollElement.removeEventListener('scroll', handleScroll);
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
   }, [hasMore, loading]);
 
   return (

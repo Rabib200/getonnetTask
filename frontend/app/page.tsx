@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { formatNumber } from '@/lib/utils';
+import { formatNumber, formatDuration } from '@/lib/utils';
 import { Loader2, Upload, CheckCircle2, XCircle } from 'lucide-react';
 import Link from 'next/link';
 
@@ -37,6 +37,11 @@ export default function HomePage() {
   const [recentCustomers, setRecentCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const parseTime = (timeStr: string) => {
+    const seconds = parseInt(timeStr.replace('s', ''));
+    return formatDuration(seconds);
+  };
 
   const fetchRecentCustomers = async () => {
     try {
@@ -158,11 +163,11 @@ export default function HomePage() {
                   </div>
                   <div>
                     <span className="text-slate-600">Elapsed:</span>
-                    <span className="ml-2 font-medium">{progress.elapsedTime}</span>
+                    <span className="ml-2 font-medium">{parseTime(progress.elapsedTime)}</span>
                   </div>
                   <div>
                     <span className="text-slate-600">ETA:</span>
-                    <span className="ml-2 font-medium">{progress.eta}</span>
+                    <span className="ml-2 font-medium">{parseTime(progress.eta)}</span>
                   </div>
                 </div>
 

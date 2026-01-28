@@ -10,15 +10,12 @@ import { Queue } from 'bullmq';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable CORS
   app.enableCors();
 
-  // Enable versioning
   app.enableVersioning({
     type: VersioningType.URI,
   });
 
-  // Enable validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -26,7 +23,6 @@ async function bootstrap() {
     }),
   );
 
-  // Bull Board Setup
   const serverAdapter = new ExpressAdapter();
   serverAdapter.setBasePath('/admin/queues');
 
@@ -44,7 +40,6 @@ async function bootstrap() {
 
   app.use('/admin/queues', serverAdapter.getRouter());
 
-  // Swagger configuration
   const config = new DocumentBuilder()
     .setTitle('Large CSV Import API')
     .setDescription('API for importing large CSV files and managing customers')

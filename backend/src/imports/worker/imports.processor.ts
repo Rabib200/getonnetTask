@@ -5,7 +5,10 @@ import * as csv from 'csv-parser';
 import { Logger } from '@nestjs/common/services/logger.service';
 import { PrismaService } from 'src/database/prisma.service';
 
-@Processor('csv-import')
+@Processor('csv-import', {
+  concurrency: 1,
+  lockDuration: 600000,
+})
 export class ImportsProcessor extends WorkerHost {
   constructor(private readonly prisma: PrismaService) {
     super();
@@ -15,7 +18,7 @@ export class ImportsProcessor extends WorkerHost {
     const { jobId, filePath } = job.data;
 
     try {
-      await this.processCsv(filePath, jobId);
+      await this.processCsv(filePath, jobId, job);
 
       await this.prisma.importJob.update({
         where: { id: jobId },
@@ -36,36 +39,46 @@ export class ImportsProcessor extends WorkerHost {
     }
   }
 
-  async processCsv(filePath: string, jobId: string): Promise<void> {
+  async processCsv(filePath: string, jobId: string, job: Job): Promise<void> {
     return new Promise((resolve, reject) => {
       let batch: any[] = [];
-      const batchSize = parseInt(process.env.BATCH_SIZE || '1000');
+      const batchSize = parseInt(process.env.BATCH_SIZE || '10000');
+      let totalProcessed = 0;
+      let batchCount = 0;
 
       const stream = fs.createReadStream(filePath).pipe(csv());
 
       stream
-        .on('data', async (row) => {
-          stream.pause();
-
+        .on('data', (row) => {
           const customer = this.transformRow(row, jobId);
           batch.push(customer);
 
           if (batch.length >= batchSize) {
+            stream.pause();
             const currentBatch = [...batch];
             batch = [];
+            batchCount++;
 
-            try {
-              await this.insertBatch(currentBatch, jobId);
-            } catch (error) {
-              Logger.error('Batch insert error:', error);
-            }
+            this.insertBatch(currentBatch, jobId)
+              .then(async () => {
+                totalProcessed += currentBatch.length;
+                if (batchCount % 2 === 0) {
+                  const progress = Math.floor((totalProcessed / 2000000) * 100);
+                  await job.updateProgress(progress);
+                }
+                stream.resume();
+              })
+              .catch((error) => {
+                Logger.error('Batch insert error:', error);
+                stream.resume();
+              });
           }
-          stream.resume();
         })
         .on('end', async () => {
           if (batch.length > 0) {
             await this.insertBatch(batch, jobId);
           }
+          await job.updateProgress(100);
           resolve();
         })
         .on('error', (error) => {
@@ -93,28 +106,14 @@ export class ImportsProcessor extends WorkerHost {
   }
 
   private async insertBatch(customers: any[], jobId: string): Promise<void> {
-    // Get existing customerIds to check for duplicates
-    const customerIds = customers.map((c) => c.customerId);
-    const existing = await this.prisma.customer.findMany({
-      where: { customerId: { in: customerIds } },
-      select: { customerId: true },
-    });
-
-    const existingIds = new Set(existing.map((c) => c.customerId));
-
-    // Filter out duplicates
-    const newCustomers = customers.filter(
-      (c) => !existingIds.has(c.customerId),
-    );
-
-    // Insert only new customers in one batch
-    if (newCustomers.length > 0) {
+    try {
       await this.prisma.customer.createMany({
-        data: newCustomers,
+        data: customers,
       });
+    } catch (error: any) {
+      Logger.error('Batch insert error:', error);
     }
 
-    // Update progress with total processed (including skipped duplicates)
     await this.prisma.importJob.update({
       where: { id: jobId },
       data: {

@@ -12,9 +12,10 @@ export class ImportsService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async triggerSync(filePath: string) {
-    const csvFilePath = filePath;
-    process.env.CSV_FILE_PATH || 'data/customers-2000000.csv';
+  async triggerSync(filePath?: string) {
+    const csvFilePath =
+      filePath || process.env.CSV_FILE_PATH || 'data/customers-2000000.csv';
+
     const isImportRunning = await this.prisma.importJob.findFirst({
       where: { status: 'IN_PROGRESS' },
     });
@@ -59,26 +60,25 @@ export class ImportsService {
         ? (importJob.processedRows / importJob.totalRows) * 100
         : 0;
 
-    const startTime = importJob.startedAt?.getTime() || Date.now();
-    const currentTime = Date.now();
-    const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
+    const elapsed = Math.max(
+      1,
+      Math.floor(
+        (Date.now() - (importJob.startedAt?.getTime() || Date.now())) / 1000,
+      ),
+    );
+    const rate = Math.round(importJob.processedRows / elapsed);
 
-    const rate =
-      elapsedSeconds > 0
-        ? Math.round(importJob.processedRows / elapsedSeconds)
-        : 0;
-
-    const remainingRows = importJob.totalRows - importJob.processedRows;
-    const etaSec = rate > 0 ? Math.ceil(remainingRows / rate) : 0;
+    const remaining = importJob.totalRows - importJob.processedRows;
+    const etaSec = rate > 0 ? Math.ceil(remaining / rate) : 0;
 
     return {
       jobId: importJob.id,
       status: importJob.status,
       processedRows: importJob.processedRows,
       totalRows: importJob.totalRows,
-      percentage,
-      rate: `${rate} rows/sec`,
-      elapsedTime: `${elapsedSeconds}s`,
+      percentage: Math.round(percentage * 100) / 100,
+      rate: `${rate.toLocaleString()} rows/sec`,
+      elapsedTime: `${elapsed}s`,
       eta: `${etaSec}s`,
       startedAt: importJob.startedAt,
       finishedAt: importJob.finishedAt,
